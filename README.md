@@ -1,7 +1,7 @@
 # Simple ascii rain demo
 
 # Demo
-![rain demo](https://github.com/x2DA/rainc/assets/demo.gif)
+![rain demo](https://github.com/x2DA/rainc/blob/main/assets/demo.gif)
 
 # Usage
 ## To run
