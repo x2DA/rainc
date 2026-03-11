@@ -2,14 +2,16 @@
 #include <curses.h>
 #include <stdlib.h>
 
-#define HALTKEY ' '
+#define HALTKEY ' ' // Key used to stop
+#define FLOORKEY 'v' // Key used to draw as if there was a floor
+
 #define RSEED 82657378
 #define TIMEPERFRAME 33300 // Time spent showing frame
-#define MAXDROPS 4096 // Max allocated drops
+#define INITIALMAXDROPS 4096 // Max allocated drops
 #define MAXDROPSPEED 2
 #define SCREENTORAINRATIO 6 // Amount of screen to amount of rain (0-10)
 
-char rainType[MAXDROPSPEED] = ":|";
+char rainType[MAXDROPSPEED*2] = ":|V@";
 
 typedef struct {
 	int x;
@@ -17,11 +19,23 @@ typedef struct {
 	int speed;
 } drop;
 
-drop rainArr[MAXDROPS];
-int usedDrops = 0;
+int allocatedDrops = 0;
+int neededDrops = 0;
+
+int running = 1;
+int doFloor = 0;
+
+/* Creates a drop at position i.
+ * Does not check the size of the drop array.
+ */
+void generateDropAt(drop *rArr, int i, int w);
+
 
 int main() {
 	srand(RSEED);
+
+	drop *rainArr = (drop *)malloc(allocatedDrops*sizeof(drop));
+
 	int keypress = 0;
 	int width = 0;
 	int height = 0;
@@ -33,18 +47,26 @@ int main() {
 	cbreak();
 	getmaxyx(stdscr, height, width);
 
-	for (int i = 0; i < MAXDROPS; i++) {
-		rainArr[i].x = rand()%width;
-		rainArr[i].y = 0-(rand()%50+1);
-		rainArr[i].speed = rand()%MAXDROPSPEED+1;
+	for (int i = 0; i < allocatedDrops; i++) {
+		generateDropAt(rainArr, i, width);
 	}
 
-	while(1) {
+	while(running) {
 		getmaxyx(stdscr, height, width);
-		usedDrops = (width*height)>>1*SCREENTORAINRATIO;
+		neededDrops = (width*height)>>1*SCREENTORAINRATIO; // Calc. needed drops
 
-		for (int i = 0; i < usedDrops; i++) {
-			if (i > MAXDROPS) { continue; }
+		if (neededDrops != allocatedDrops) { // re-alloc if we have more or less
+											 // drops than needed
+			rainArr = (drop *)realloc(rainArr, neededDrops*sizeof(drop));
+
+			for (int i = allocatedDrops; i < neededDrops; i++) {
+				generateDropAt(rainArr, i, width);
+			}
+			allocatedDrops = neededDrops;
+		}
+
+
+		for (int i = 0; i < neededDrops; i++) {
 
 			// Update positions
 			rainArr[i].y += rainArr[i].speed;
@@ -56,19 +78,38 @@ int main() {
 			// Draw
 			if (rainArr[i].x < 0 || rainArr[i].x > width) { continue; }
 			if (rainArr[i].y < 0 || rainArr[i].y > height) { continue; }
-			mvaddch(rainArr[i].y, rainArr[i].x, rainType[rainArr[i].speed-1]);
+
+			char dropType = ( doFloor && (rainArr[i].y >= height-1)) ? rainType[rainArr[i].speed+1] : rainType[rainArr[i].speed-1];
+			mvaddch(rainArr[i].y, rainArr[i].x, dropType);
+
 		}
 
 		// Clear
 		refresh();
 		usleep(TIMEPERFRAME);
 		keypress = getch();
-		if (keypress == HALTKEY) {
-			endwin();
+
+		switch(keypress) {
+			case HALTKEY:
+				endwin();
+				free(rainArr);
+				running = 0;
+			break;
+
+			case FLOORKEY:
+				doFloor = !doFloor;
 			break;
 		}
+
 		erase();
 	}
 
+}
+
+
+void generateDropAt(drop *rArr, int i, int w) {
+	rArr[i].x = rand()%w;
+	rArr[i].y = 0-(rand()%50+1);
+	rArr[i].speed = rand()%MAXDROPSPEED+1;
 }
 
